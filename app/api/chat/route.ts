@@ -63,17 +63,18 @@ export async function POST(request: NextRequest) {
     const response = await model.invoke(messages);
 
     return NextResponse.json({ response: response.content });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error al generar respuesta:', error);
 
     // Proporcionar mensajes de error más específicos
     let errorMessage = 'Error al procesar tu mensaje. Intenta nuevamente.';
     
-    if (error?.message?.includes('API key')) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    if (errorMsg.includes('API key')) {
       errorMessage = 'Error de autenticación: Verifica que tu API key de OpenAI esté configurada correctamente.';
-    } else if (error?.message?.includes('quota') || error?.message?.includes('billing')) {
+    } else if (errorMsg.includes('quota') || errorMsg.includes('billing')) {
       errorMessage = 'Error de cuota: Has excedido tu límite de uso de la API de OpenAI.';
-    } else if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
+    } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
       errorMessage = 'Error de conexión: No se pudo conectar con la API de OpenAI.';
     }
 

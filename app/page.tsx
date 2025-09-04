@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
 import { LangchainService, ChatMessage } from './services/langchain';
 import { useAuth } from './contexts/AuthContext';
 import Auth from './components/Auth';
@@ -67,7 +66,7 @@ function ChatInterface() {
       }
       
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error al obtener respuesta del LLM:', error);
       
       // Actualizar estado de conexión en caso de error

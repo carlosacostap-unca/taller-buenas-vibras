@@ -22,10 +22,10 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
 
     try {
       if (isLogin) {
-        const { data, error } = await authService.signIn(email, password)
+        const { error } = await authService.signIn(email, password)
         if (error) {
           setError(error.message)
-        } else if (data.user) {
+        } else {
           onAuthSuccess()
         }
       } else {
@@ -36,7 +36,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
           setError('Revisa tu email para confirmar tu cuenta')
         }
       }
-    } catch (err) {
+    } catch {
       setError('Error inesperado. Intenta nuevamente.')
     } finally {
       setLoading(false)

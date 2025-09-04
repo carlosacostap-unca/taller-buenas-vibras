@@ -34,7 +34,7 @@ export class LangchainService {
       }
 
       return data.response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error al generar respuesta:', error);
       throw error;
     }
