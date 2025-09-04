@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { message, conversationHistory } = await request.json();
+    const { message, conversationHistory, infoContext } = await request.json();
 
     // Verificar que la API key esté configurada
     const apiKey = process.env.OPENAI_API_KEY;
@@ -38,10 +38,48 @@ export async function POST(request: NextRequest) {
       openAIApiKey: apiKey,
     });
 
-    // Mensaje del sistema
-    const systemMessage = new SystemMessage(
-      'Eres un asistente de IA útil y amigable. Responde de manera conversacional y natural en español. Mantén tus respuestas concisas pero informativas.'
-    );
+    // Crear prompt dinámico basado en el contexto de información
+    let systemPrompt = `Eres un asistente especializado en recopilar información básica de usuarios para el Taller de Buenas Vibras. Tu objetivo principal es obtener de manera amigable y conversacional los siguientes datos:
+
+1. **Empresa**: ¿En qué empresa trabajas?
+2. **Industria**: ¿A qué sector o industria pertenece tu empresa?
+3. **Rol**: ¿Cuál es tu posición o rol en la empresa?
+
+Instrucciones:
+- Haz preguntas de una en una, de manera natural y conversacional
+- Si el usuario proporciona información parcial, pide aclaración o más detalles
+- Una vez que tengas toda la información, confirma los datos con el usuario
+- Mantén un tono amigable y profesional
+- Si el usuario se desvía del tema, redirige gentilmente hacia la recopilación de información
+- Responde siempre en español`;
+
+    // Añadir contexto de información ya recopilada
+    if (infoContext) {
+      systemPrompt += `\n\n**CONTEXTO ACTUAL:**\n`;
+      systemPrompt += `Progreso: ${infoContext.completedFields}/${infoContext.totalFields} campos completados\n`;
+      
+      if (infoContext.infoStatus.empresa) {
+        systemPrompt += `✅ Empresa: "${infoContext.userInfo.empresa}"\n`;
+      } else {
+        systemPrompt += `❌ Empresa: Pendiente\n`;
+      }
+      
+      if (infoContext.infoStatus.industria) {
+        systemPrompt += `✅ Industria: "${infoContext.userInfo.industria}"\n`;
+      } else {
+        systemPrompt += `❌ Industria: Pendiente\n`;
+      }
+      
+      if (infoContext.infoStatus.rol) {
+        systemPrompt += `✅ Rol: "${infoContext.userInfo.rol}"\n`;
+      } else {
+        systemPrompt += `❌ Rol: Pendiente\n`;
+      }
+      
+      systemPrompt += `\nBasa tu siguiente pregunta en esta información. Si todos los campos están completos, confirma la información con el usuario.`;
+    }
+
+    const systemMessage = new SystemMessage(systemPrompt);
 
     // Preparar los mensajes para el contexto
     const messages = [systemMessage];

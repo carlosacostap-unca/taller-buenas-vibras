@@ -12,11 +12,23 @@ interface Message {
   timestamp: Date;
 }
 
+interface UserInfo {
+  empresa: string;
+  industria: string;
+  rol: string;
+}
+
+interface InfoStatus {
+  empresa: boolean;
+  industria: boolean;
+  rol: boolean;
+}
+
 function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: '¡Hola! Soy tu asistente de IA powered by GPT-4. ¿En qué puedo ayudarte hoy?',
+      content: '¡Hola! Bienvenido al Taller de Buenas Vibras 🌟\n\nSoy tu asistente y me gustaría conocerte mejor para personalizar tu experiencia. Para comenzar, necesito recopilar algunos datos básicos:\n\n• Tu empresa\n• La industria en la que trabajas\n• Tu rol o posición\n\n¿Podrías contarme en qué empresa trabajas actualmente?',
       isUser: false,
       timestamp: new Date()
     }
@@ -24,10 +36,76 @@ function ChatInterface() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'testing'>('testing');
+  const [userInfo, setUserInfo] = useState<UserInfo>({ empresa: '', industria: '', rol: '' });
+  const [infoStatus, setInfoStatus] = useState<InfoStatus>({ empresa: false, industria: false, rol: false });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Función para analizar y extraer información del mensaje del usuario
+  const analyzeUserMessage = (message: string) => {
+    const lowerMessage = message.toLowerCase();
+    const newUserInfo = { ...userInfo };
+    const newInfoStatus = { ...infoStatus };
+
+    // Detectar menciones de empresa (patrones más amplios)
+    if (!infoStatus.empresa) {
+      const empresaPatterns = [
+        /(?:trabajo en|empresa|compañía)\s+([A-Za-z0-9\s,.-]+)/i,
+        /^([A-Za-z0-9\s,.-]+)$/i // Respuesta directa cuando se pregunta por empresa
+      ];
+      
+      for (const pattern of empresaPatterns) {
+        const match = message.match(pattern);
+        if (match && match[1].trim().length > 2) {
+          newUserInfo.empresa = match[1].trim();
+          newInfoStatus.empresa = true;
+          break;
+        }
+      }
+    }
+
+    // Detectar menciones de industria/sector (patrones más amplios)
+    if (!infoStatus.industria && infoStatus.empresa) {
+      const industriaPatterns = [
+        /(?:sector|industria|área|rubro)\s+(?:de\s+)?([A-Za-z0-9\s,.-]+)/i,
+        /(?:tecnología|salud|educación|finanzas|retail|manufactura|servicios|construcción|agricultura|turismo|entretenimiento|logística|consultoría)/i
+      ];
+      
+      for (const pattern of industriaPatterns) {
+        const match = message.match(pattern);
+        if (match) {
+          newUserInfo.industria = match[1] ? match[1].trim() : match[0];
+          newInfoStatus.industria = true;
+          break;
+        }
+      }
+    }
+
+    // Detectar menciones de rol/posición (patrones más amplios)
+    if (!infoStatus.rol && infoStatus.industria) {
+      const rolPatterns = [
+        /(?:soy|trabajo como|mi rol es|posición de|cargo de)\s+([A-Za-z0-9\s,.-]+)/i,
+        /(?:desarrollador|gerente|analista|director|coordinador|especialista|consultor|ingeniero|diseñador|vendedor|administrador)/i
+      ];
+      
+      for (const pattern of rolPatterns) {
+        const match = message.match(pattern);
+        if (match) {
+          newUserInfo.rol = match[1] ? match[1].trim() : match[0];
+          newInfoStatus.rol = true;
+          break;
+        }
+      }
+    }
+
+    // Actualizar estado si se encontró nueva información
+    if (JSON.stringify(newUserInfo) !== JSON.stringify(userInfo)) {
+      setUserInfo(newUserInfo);
+      setInfoStatus(newInfoStatus);
+    }
   };
 
   useEffect(() => {
@@ -57,8 +135,16 @@ function ChatInterface() {
         isUser: msg.isUser
       }));
       
-      // Generar respuesta usando Langchain
-      const response = await LangchainService.generateResponse(userMessage, conversationHistory);
+      // Crear contexto de información recopilada
+      const infoContext = {
+        userInfo,
+        infoStatus,
+        completedFields: Object.values(infoStatus).filter(Boolean).length,
+        totalFields: 3
+      };
+      
+      // Generar respuesta usando Langchain con contexto
+      const response = await LangchainService.generateResponse(userMessage, conversationHistory, infoContext);
       
       // Actualizar estado de conexión si la respuesta fue exitosa
       if (connectionStatus !== 'connected') {
@@ -98,6 +184,10 @@ function ChatInterface() {
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
+    
+    // Analizar el mensaje del usuario para extraer información
+    analyzeUserMessage(inputMessage);
+    
     setIsLoading(true);
 
     try {
@@ -133,10 +223,28 @@ function ChatInterface() {
           <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">C</span>
           </div>
-          <h1 className="text-xl font-semibold text-gray-800">ChatApp</h1>
+          <h1 className="text-xl font-semibold text-gray-800">Taller Buenas Vibras</h1>
         </div>
         
         <div className="flex items-center space-x-4">
+           {/* Indicador de progreso de información */}
+           <div className="flex items-center space-x-2">
+             <div className="flex space-x-1">
+               <div className={`w-2 h-2 rounded-full ${
+                 infoStatus.empresa ? 'bg-green-500' : 'bg-gray-300'
+               }`}></div>
+               <div className={`w-2 h-2 rounded-full ${
+                 infoStatus.industria ? 'bg-green-500' : 'bg-gray-300'
+               }`}></div>
+               <div className={`w-2 h-2 rounded-full ${
+                 infoStatus.rol ? 'bg-green-500' : 'bg-gray-300'
+               }`}></div>
+             </div>
+             <span className="text-xs text-gray-600">
+               {Object.values(infoStatus).filter(Boolean).length}/3 completado
+             </span>
+           </div>
+           
            {/* Indicador de estado de conexión */}
            <div className="flex items-center space-x-2">
              <div className={`w-2 h-2 rounded-full ${
@@ -205,6 +313,29 @@ function ChatInterface() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Panel de resumen cuando se complete la información */}
+      {Object.values(infoStatus).every(Boolean) && (
+        <div className="bg-green-50 border-t border-green-200 px-4 py-3">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-start space-x-3">
+              <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-green-800 mb-2">Información Recopilada Completamente</h3>
+                <div className="text-sm text-green-700 space-y-1">
+                  <p><strong>Empresa:</strong> {userInfo.empresa}</p>
+                  <p><strong>Industria:</strong> {userInfo.industria}</p>
+                  <p><strong>Rol:</strong> {userInfo.rol}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input Area */}
       <div className="bg-white border-t border-gray-200 px-4 py-4">
         <div className="max-w-4xl mx-auto">
@@ -214,7 +345,7 @@ function ChatInterface() {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Type your message here..."
+                placeholder="Escribe tu respuesta aquí..."
                 className="w-full px-4 py-3 border border-gray-300 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm text-gray-900 placeholder-gray-500"
                 rows={1}
                 style={{

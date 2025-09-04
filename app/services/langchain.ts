@@ -9,11 +9,13 @@ export class LangchainService {
    * Genera una respuesta usando GPT-4 a través de la API route
    * @param message El mensaje del usuario
    * @param conversationHistory Historial de la conversación (opcional)
+   * @param infoContext Contexto de información recopilada (opcional)
    * @returns Promise con la respuesta del asistente
    */
   static async generateResponse(
     message: string,
-    conversationHistory: ChatMessage[] = []
+    conversationHistory: ChatMessage[] = [],
+    infoContext?: any
   ): Promise<string> {
     try {
       const response = await fetch('/api/chat', {
@@ -24,6 +26,7 @@ export class LangchainService {
         body: JSON.stringify({
           message,
           conversationHistory,
+          infoContext,
         }),
       });
 
