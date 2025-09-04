@@ -73,11 +73,12 @@ function ChatInterface() {
       setConnectionStatus('disconnected');
       
       // Proporcionar mensajes de error más específicos
-      if (error?.message?.includes('API key')) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('API key')) {
         return '❌ Error de autenticación: Verifica que tu API key de OpenAI esté configurada correctamente en el archivo .env.local';
-      } else if (error?.message?.includes('quota') || error?.message?.includes('billing')) {
+      } else if (errorMsg.includes('quota') || errorMsg.includes('billing')) {
         return '💳 Error de cuota: Has excedido tu límite de uso de la API de OpenAI. Verifica tu plan de facturación.';
-      } else if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
         return '🌐 Error de conexión: No se pudo conectar con la API de OpenAI. Verifica tu conexión a internet.';
       } else {
         return '⚠️ Lo siento, hubo un error inesperado al procesar tu mensaje. Por favor, intenta de nuevo en unos momentos.';

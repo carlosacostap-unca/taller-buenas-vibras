@@ -29,7 +29,7 @@ export default function Auth({ onAuthSuccess }: AuthProps) {
           onAuthSuccess()
         }
       } else {
-        const { data, error } = await authService.signUp(email, password, fullName)
+        const { error } = await authService.signUp(email, password, fullName)
         if (error) {
           setError(error.message)
         } else {
