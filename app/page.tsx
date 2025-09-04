@@ -1,103 +1,306 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
+import { LangchainService, ChatMessage } from './services/langchain';
+import { useAuth } from './contexts/AuthContext';
+import Auth from './components/Auth';
+
+interface Message {
+  id: string;
+  content: string;
+  isUser: boolean;
+  timestamp: Date;
+}
+
+function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      content: '¡Hola! Soy tu asistente de IA powered by GPT-4. ¿En qué puedo ayudarte hoy?',
+      isUser: false,
+      timestamp: new Date()
+    }
+  ]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'testing'>('testing');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Verificar conexión al cargar el componente
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        const isConnected = await LangchainService.testConnection();
+        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      } catch (error) {
+        console.error('Error al probar conexión:', error);
+        setConnectionStatus('disconnected');
+      }
+    };
+
+    testConnection();
+  }, []);
+
+  const getLLMResponse = async (userMessage: string): Promise<string> => {
+    try {
+      // Convertir mensajes al formato esperado por el servicio
+      const conversationHistory: ChatMessage[] = messages.map(msg => ({
+        content: msg.content,
+        isUser: msg.isUser
+      }));
+      
+      // Generar respuesta usando Langchain
+      const response = await LangchainService.generateResponse(userMessage, conversationHistory);
+      
+      // Actualizar estado de conexión si la respuesta fue exitosa
+      if (connectionStatus !== 'connected') {
+        setConnectionStatus('connected');
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Error al obtener respuesta del LLM:', error);
+      
+      // Actualizar estado de conexión en caso de error
+      setConnectionStatus('disconnected');
+      
+      // Proporcionar mensajes de error más específicos
+      if (error?.message?.includes('API key')) {
+        return '❌ Error de autenticación: Verifica que tu API key de OpenAI esté configurada correctamente en el archivo .env.local';
+      } else if (error?.message?.includes('quota') || error?.message?.includes('billing')) {
+        return '💳 Error de cuota: Has excedido tu límite de uso de la API de OpenAI. Verifica tu plan de facturación.';
+      } else if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
+        return '🌐 Error de conexión: No se pudo conectar con la API de OpenAI. Verifica tu conexión a internet.';
+      } else {
+        return '⚠️ Lo siento, hubo un error inesperado al procesar tu mensaje. Por favor, intenta de nuevo en unos momentos.';
+      }
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: inputMessage,
+      isUser: true,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      const llmResponse = await getLLMResponse(inputMessage);
+      
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: llmResponse,
+        isUser: false,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error getting LLM response:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="flex flex-col h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-sm">C</span>
+          </div>
+          <h1 className="text-xl font-semibold text-gray-800">ChatApp</h1>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        
+        <div className="flex items-center space-x-4">
+           {/* Indicador de estado de conexión */}
+           <div className="flex items-center space-x-2">
+             <div className={`w-2 h-2 rounded-full ${
+               connectionStatus === 'connected' ? 'bg-green-500' :
+               connectionStatus === 'disconnected' ? 'bg-red-500' :
+               'bg-yellow-500 animate-pulse'
+             }`}></div>
+             <span className="text-xs text-gray-600">
+               {connectionStatus === 'connected' ? 'GPT-4 Conectado' :
+                connectionStatus === 'disconnected' ? 'Desconectado' :
+                'Conectando...'}
+             </span>
+           </div>
+           
+           <UserMenu />
+         </div>
+      </header>
+
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+          >
+            <div className={`flex items-start space-x-3 max-w-3xl ${
+              message.isUser ? 'flex-row-reverse space-x-reverse' : ''
+            }`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                message.isUser 
+                  ? 'bg-red-500 text-white' 
+                  : 'bg-gray-300 text-gray-600'
+              }`}>
+                <span className="text-sm font-medium">
+                  {message.isUser ? 'U' : 'AI'}
+                </span>
+              </div>
+              <div className={`px-4 py-3 rounded-2xl ${
+                message.isUser
+                  ? 'bg-red-500 text-white rounded-br-md'
+                  : 'bg-white text-gray-800 border border-gray-200 rounded-bl-md'
+              }`}>
+                <p className="text-sm leading-relaxed">{message.content}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+        
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="flex items-start space-x-3 max-w-3xl">
+              <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-medium text-gray-600">AI</span>
+              </div>
+              <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl rounded-bl-md">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="bg-white border-t border-gray-200 px-4 py-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-end space-x-3">
+            <div className="flex-1 relative">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Type your message here..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm text-gray-900 placeholder-gray-500"
+                rows={1}
+                style={{
+                  minHeight: '44px',
+                  maxHeight: '120px'
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSendMessage}
+              disabled={!inputMessage.trim() || isLoading}
+              className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white p-3 rounded-full transition-colors duration-200"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
+}
+
+// Componente del menú de usuario
+function UserMenu() {
+  const { user, signOut } = useAuth();
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setShowDropdown(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowDropdown(!showDropdown)}
+        className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
+      >
+        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+          <span className="text-white text-sm font-medium">
+            {user?.user_metadata?.full_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+          </span>
+        </div>
+        <span className="text-sm font-medium hidden md:block">
+          {user?.user_metadata?.full_name || user?.email}
+        </span>
+      </button>
+
+      {showDropdown && (
+        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+          <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-100">
+            <div className="font-medium">{user?.user_metadata?.full_name || 'Usuario'}</div>
+            <div className="text-gray-500">{user?.email}</div>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+          >
+            Cerrar Sesión
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Componente principal de la aplicación
+export default function ChatApp() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Auth onAuthSuccess={() => {}} />;
+  }
+
+  return <ChatInterface />;
 }
